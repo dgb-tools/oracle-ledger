@@ -1,0 +1,45 @@
+// Render the /oracles page from a snapshot directory. Aggregates only; per-block rows are downloads.
+import fs from "node:fs"; import path from "node:path";
+const dir = process.argv[2]; const out = process.argv[3] || "site-out"; if (!dir) throw new Error("usage: render <snapshotDir> [outDir]");
+const J = (n) => JSON.parse(fs.readFileSync(path.join(dir, n), "utf8"));
+const m = J("manifest.json"), slots = J("slots.json"), days = J("slot-days.json"), cov = J("coverage.json"), assoc = J("association.json");
+const sums = fs.readFileSync(path.join(dir, "SHA256SUMS"), "utf8");
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const date = (t) => new Date(t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC";
+// chart: distinct signers per day + observations per day (inline SVG)
+const W = 900, H = 220, P = 36; const n = days.length; const x = (i) => P + (i * (W - 2 * P)) / Math.max(1, n - 1);
+const maxObs = Math.max(1, ...days.map((d) => d.observations));
+const line = (key, max, color) => `<polyline fill="none" stroke="${color}" stroke-width="1.5" points="${days.map((d, i) => `${x(i).toFixed(1)},${(H - P - ((d[key]) / max) * (H - 2 * P)).toFixed(1)}`).join(" ")}"/>`;
+const ticks = days.filter((_, i) => i % Math.max(1, Math.floor(n / 8)) === 0).map((d, k) => { const i = days.indexOf(d); return `<text x="${x(i).toFixed(1)}" y="${H - 8}" font-size="10" text-anchor="middle" fill="#666">${d.day.slice(5)}</text>`; }).join("");
+const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Distinct signing slots per day and observations per day"><rect width="${W}" height="${H}" fill="#fff"/>
+<line x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" stroke="#ccc"/><text x="${P}" y="14" font-size="11" fill="#1d4ed8">distinct slots signing per day (of 35, left scale 0–35)</text><text x="${W / 2}" y="14" font-size="11" fill="#b45309">observations (unique bundles) per day (scaled to max ${maxObs})</text>
+${line("distinct_signers", 35, "#1d4ed8")}${line("observations", maxObs, "#b45309")}${ticks}</svg>`;
+// association: top positive phi pairs, numeric order, no ranking language
+const pos = assoc.filter((a) => a.phi !== null && a.phi > 0).sort((a, b) => b.phi - a.phi).slice(0, 12).sort((p, q) => p.a - q.a || p.b - q.b);
+const slotRows = slots.map((s) => `<tr><td>${s.slot}</td><td>${s.signed}</td><td>${s.missed}</td><td>${s.rate === null ? "—" : (s.rate * 100).toFixed(2) + "%"}</td></tr>`).join("");
+const jsonld = { "@context": "https://schema.org", "@type": "Dataset", name: "DigiDollar oracle signing-participation ledger", description: "Per-epoch signing sets of the 35 DigiDollar oracle slots decoded from every DigiByte mainnet coinbase since activation. Signing participation, not uptime. Slots are numbers.", url: "https://dgbinsights.com/oracles/", license: "https://opensource.org/licenses/MIT", isAccessibleForFree: true, creator: { "@type": "Organization", name: "dgb-tools", url: "https://github.com/dgb-tools/oracle-ledger" }, version: m.snapshot_id, temporalCoverage: `${new Date(1752710400 * 1000).toISOString().slice(0, 10)}/${new Date(m.snapshot_end_time * 1000).toISOString().slice(0, 10)}`, distribution: m.files.map((f) => ({ "@type": "DataDownload", encodingFormat: f.endsWith(".jsonl") ? "application/jsonl" : "application/json", contentUrl: `https://dgbinsights.com/oracles/snapshots/${m.snapshot_id}/${f}` })) };
+const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DigiDollar oracle signing participation — dgbinsights</title>
+<meta name="description" content="Which of the 35 DigiDollar oracle slots signed each price epoch, decoded from every DigiByte mainnet coinbase since activation. Signing participation, not uptime. Slots are numbers.">
+<link rel="canonical" href="https://dgbinsights.com/oracles/"><script type="application/ld+json">${JSON.stringify(jsonld)}</script>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#111}table{border-collapse:collapse;font-variant-numeric:tabular-nums}td,th{border-bottom:1px solid #e5e5e5;padding:.3rem .6rem;text-align:right}th:first-child,td:first-child{text-align:left}.note{background:#fff7ed;border-left:4px solid #b45309;padding:.6rem 1rem}code{font-size:.9em}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.6rem}.k{border:1px solid #e5e5e5;padding:.6rem;border-radius:6px}.k b{display:block;font-size:1.4em}</style></head><body>
+<p><a href="/">dgbinsights</a> · <a href="/lookup">lookup</a> · <a href="/mainnet-report">mainnet report</a></p>
+<h1>DigiDollar oracle signing participation</h1>
+<p class="note"><strong>Preview.</strong> ${esc(m.label)}. Snapshot <code>${m.snapshot_id}</code>, blocks ${cov.first_height.toLocaleString()}–${cov.end_height.toLocaleString()} (through ${date(m.snapshot_end_time)}). Read the <a href="https://github.com/dgb-tools/oracle-ledger/blob/main/METHODOLOGY.md">methodology</a> before quoting a number: the bitmap in each block records the <em>signing set the aggregator selected</em> — a per-epoch lottery among the oracles that participated — so these are signing-participation rates, not uptime and not liveness. Slots are numbers; no operator identity is used.</p>
+<div class="grid"><div class="k"><b>${cov.epochs_with_bundle.toLocaleString()}</b>epochs with a bundle, of ${cov.expected_epochs.toLocaleString()} expected</div><div class="k"><b>${cov.epochs_without_bundle.toLocaleString()}</b>epochs without one (coverage, charged to no slot)</div><div class="k"><b>${cov.unique_observations.toLocaleString()}</b>unique bundle observations</div><div class="k"><b>${m.threshold}</b>signers per bundle (consensus threshold; invariant checked)</div></div>
+<h2>Distinct slots signing, per day</h2>${svg}
+<p>Daily series is published with a 24-hour delay. Values: <a href="snapshots/${m.snapshot_id}/slot-days.json">slot-days.json</a>.</p>
+<h2>Per-slot signing participation</h2><p>Over ${cov.unique_observations.toLocaleString()} unique observations, numeric slot order. Expected rate for a slot participating in every epoch is 7/N where N is that epoch's participant count; the ledger does not estimate N.</p>
+<table><thead><tr><th>slot</th><th>signed</th><th>missed</th><th>rate</th></tr></thead><tbody>${slotRows}</tbody></table>
+<h2>Absence association</h2><p>For each slot pair, a 2×2 table of joint and single absence over unique observations and the phi coefficient (n = ${cov.unique_observations.toLocaleString()}). Under random 7-of-35 selection phi between two absence series is slightly negative; a small negative is not anti-coordination. Positive phi is the only chain-visible clustering, and it is still non-selection, not liveness. Full matrix: <a href="snapshots/${m.snapshot_id}/association.json">association.json</a>. The ${pos.length} pairs with the largest positive phi, in slot order:</p>
+<table><thead><tr><th>pair</th><th>both absent</th><th>a only</th><th>b only</th><th>both present</th><th>phi</th></tr></thead><tbody>${pos.map((p) => `<tr><td>${p.a} · ${p.b}</td><td>${p.both_absent}</td><td>${p.a_absent_only}</td><td>${p.b_absent_only}</td><td>${p.both_present}</td><td>${p.phi.toFixed(3)}</td></tr>`).join("")}</tbody></table>
+<h2>Files and provenance</h2><p><a href="latest.json">latest.json</a> · <a href="schema.json">schema.json</a> · <a href="snapshots/${m.snapshot_id}/manifest.json">manifest.json</a> · <a href="snapshots/${m.snapshot_id}/epochs.jsonl">epochs.jsonl</a> · <a href="snapshots/${m.snapshot_id}/slots.json">slots.json</a> · per-block rows in 20,000-height chunks (<code>blocks-&lt;height&gt;.jsonl</code>) · <a href="snapshots/${m.snapshot_id}/SHA256SUMS">SHA256SUMS</a></p>
+<p>Source: ${esc(m.source)}. Walker <a href="https://github.com/dgb-tools/oracle-ledger">dgb-tools/oracle-ledger</a> at <code>${m.walker_commit || "uncommitted"}</code>, decoder <code>dgb-digidollar-codec ${m.codec_version}</code>. Invariants: ${esc(JSON.stringify(m.invariants))}. Generated ${esc(m.generated_at)}.</p>
+<pre>${esc(sums)}</pre>
+<p><small>Independent community instrument. Not affiliated with the DigiByte Foundation. Corrections: <a href="https://github.com/dgb-tools/oracle-ledger/issues">issues</a>.</small></p>
+</body></html>`;
+fs.mkdirSync(path.join(out, "oracles", "snapshots", m.snapshot_id), { recursive: true });
+fs.writeFileSync(path.join(out, "oracles", "index.html"), html);
+for (const f of fs.readdirSync(dir)) fs.copyFileSync(path.join(dir, f), path.join(out, "oracles", "snapshots", m.snapshot_id, f));
+fs.copyFileSync(path.join(dir, "..", "..", "latest.json"), path.join(out, "oracles", "latest.json"));
+fs.copyFileSync("schema/oracle-ledger.schema.json", path.join(out, "oracles", "schema.json"));
+console.error("rendered", path.join(out, "oracles"), "files", fs.readdirSync(path.join(out, "oracles", "snapshots", m.snapshot_id)).length);
