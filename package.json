@@ -1,0 +1,11 @@
+{
+  "name": "dgb-oracle-ledger",
+  "version": "0.1.0",
+  "description": "DigiDollar oracle signing-participation ledger: walks every mainnet coinbase since activation, decodes the OP_ORACLE bundle, publishes per-epoch and per-slot participation with provenance. Slots are numbers.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": { "walk": "node src/walk.js", "aggregate": "node src/aggregate.js", "test": "node --test test/" },
+  "dependencies": { "dgb-digidollar-codec": "github:dgb-tools/dgb-digidollar-codec#main" }
+}

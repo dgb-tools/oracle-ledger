@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dgbinsights.com/oracles/schema.json",
+  "title": "DigiDollar oracle signing-participation ledger",
+  "version": "0.1.0",
+  "description": "Rows are public-chain facts. The bitmap is the signing set the aggregator used, not liveness. Slots are numbers. See METHODOLOGY.md.",
+  "$defs": {
+    "block": {
+      "type": "object",
+      "required": ["height", "hash", "prev", "time", "oracle_present"],
+      "properties": {
+        "height": {"type": "integer"}, "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "prev": {"type": "string"},
+        "time": {"type": "integer", "description": "block header time, unix seconds"},
+        "ntx": {"type": "integer"}, "size": {"type": "integer"},
+        "oracle_present": {"type": "boolean"}, "oracle_outputs": {"type": "integer"},
+        "version": {"type": ["integer", "null"]}, "valid": {"type": ["boolean", "null"]}, "reason": {"type": ["string", "null"]},
+        "epoch": {"type": ["integer", "null"], "description": "payload epoch (u32 LE)"},
+        "price_micro_usd": {"type": ["integer", "null"]}, "bundle_timestamp": {"type": ["integer", "null"]},
+        "bitmap_hex": {"type": ["string", "null"]}, "slots": {"type": ["array", "null"], "items": {"type": "integer", "minimum": 0, "maximum": 255}},
+        "signer_count": {"type": ["integer", "null"]}, "script_hex": {"type": ["string", "null"]}, "source": {"type": "string"}
+      }
+    },
+    "epoch": {
+      "type": "object",
+      "required": ["epoch", "first_height", "copies", "signatures", "slots", "signer_count", "epoch_from_height_match"],
+      "properties": {
+        "epoch": {"type": "integer"}, "first_height": {"type": "integer"}, "last_height": {"type": "integer"},
+        "copies": {"type": "integer", "description": "byte-identical repetitions counted in coverage"},
+        "signatures": {"type": "integer", "description": "distinct aggregate signatures in this epoch (>1 = duplicate-bundle epoch)"},
+        "slots": {"type": "array", "items": {"type": "integer"}}, "signer_count": {"type": "integer"},
+        "price_micro_usd": {"type": "integer"}, "bundle_timestamp": {"type": "integer"}, "first_block_time": {"type": "integer"},
+        "epoch_from_height_match": {"type": "boolean"}
+      }
+    },
+    "slot": {
+      "type": "object",
+      "required": ["slot", "signed", "missed", "rate"],
+      "properties": {"slot": {"type": "integer"}, "signed": {"type": "integer"}, "missed": {"type": "integer"}, "rate": {"type": ["number", "null"], "description": "signed/(signed+missed) over unique observations; selection frequency, not uptime"}}
+    },
+    "association": {
+      "type": "object",
+      "required": ["a", "b", "n", "both_absent", "a_absent_only", "b_absent_only", "both_present", "phi"],
+      "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}, "n": {"type": "integer"}, "both_absent": {"type": "integer"}, "a_absent_only": {"type": "integer"}, "b_absent_only": {"type": "integer"}, "both_present": {"type": "integer"}, "phi": {"type": ["number", "null"]}}
+    }
+  }
+}
