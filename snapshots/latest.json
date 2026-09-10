@@ -1,0 +1,10 @@
+{
+ "snapshot_id": "mainnet-24182922-f21e60c7",
+ "status": "preview",
+ "end_height": 24182922,
+ "end_hash": "f21e60c7b943e394e35f3bf1bae5f7f33ead99e440b7dde05b6def45e0900200",
+ "epochs_with_bundle": 7504,
+ "expected_epochs": 7838,
+ "unique_observations": 7504,
+ "generated_at": "2026-09-10T01:22:17.513Z"
+}
