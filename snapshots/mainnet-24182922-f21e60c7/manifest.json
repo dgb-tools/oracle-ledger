@@ -13,10 +13,10 @@
  "roster": 35,
  "threshold": 7,
  "source": "https://digiexplorer.info/api (raw blocks)",
- "walker_commit": "0c2ff8221a6ab244558e6c3fe346afb8061b58d6",
+ "walker_commit": "3adbf60e1c1d08955888c4b13dd791afa2eebf18",
  "codec_version": "0.3.0",
  "schema_version": "0.1.0",
- "generated_at": "2026-09-10T01:22:17.513Z",
+ "generated_at": "2026-09-10T01:27:20.861Z",
  "coverage": {
   "blocks": 313483,
   "first_height": 23869440,
