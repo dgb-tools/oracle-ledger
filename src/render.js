@@ -41,5 +41,5 @@ fs.mkdirSync(path.join(out, "oracles", "snapshots", m.snapshot_id), { recursive:
 fs.writeFileSync(path.join(out, "oracles", "index.html"), html);
 for (const f of fs.readdirSync(dir)) fs.copyFileSync(path.join(dir, f), path.join(out, "oracles", "snapshots", m.snapshot_id, f));
 fs.copyFileSync(path.join(dir, "..", "..", "latest.json"), path.join(out, "oracles", "latest.json"));
-fs.copyFileSync("schema/oracle-ledger.schema.json", path.join(out, "oracles", "schema.json"));
+fs.copyFileSync(new URL("../schema/oracle-ledger.schema.json", import.meta.url), path.join(out, "oracles", "schema.json"));
 console.error("rendered", path.join(out, "oracles"), "files", fs.readdirSync(path.join(out, "oracles", "snapshots", m.snapshot_id)).length);
