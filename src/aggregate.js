@@ -42,7 +42,8 @@ for (let a = 0; a < ROSTER; a++) for (let b = a + 1; b < ROSTER; b++) { let n11 
   assoc.push({ a, b, n, both_absent: n11, a_absent_only: n10, b_absent_only: n01, both_present: n00, phi }); }
 // write snapshot
 const dir = path.join(OUTDIR, snapId); fs.mkdirSync(dir, { recursive: true });
-const canon = (o) => JSON.stringify(o, Object.keys(o).sort());
+const sortKeys = (v) => Array.isArray(v) ? v.map(sortKeys) : (v && typeof v === "object") ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v;
+const canon = (o) => JSON.stringify(sortKeys(o)); // recursive key sort; a replacer array would whitelist keys at every depth
 const files = { "epochs.jsonl": epochs.map(canon).join("\n") + "\n", "slots.json": JSON.stringify(slots, null, 1), "slot-days.json": JSON.stringify(slotDays, null, 1), "association.json": JSON.stringify(assoc), "coverage.json": JSON.stringify(coverage, null, 1) };
 // per-block rows in 20k-height chunks (Pages file-size limit)
 for (let h0 = blocks[0].height; h0 <= end.height; h0 += 20000) { const chunk = blocks.filter((b) => b.height >= h0 && b.height < h0 + 20000); files[`blocks-${h0}.jsonl`] = chunk.map(canon).join("\n") + "\n"; }

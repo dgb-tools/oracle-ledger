@@ -9,6 +9,9 @@ const START = Number(process.env.START || 23869440);
 const CONC = Number(process.env.CONCURRENCY || 24);
 const OUT = process.env.OUT || "data/blocks.jsonl";
 const STATE = OUT + ".state.json";
+const RAW_DIR = process.env.RAW_DIR || null;      // persist raw blocks: raw-<chunkStart>.bin + .idx.jsonl (height,offset,len)
+const NO_ROWS = process.env.NO_ROWS === "1";      // raw-only backfill mode
+const END = process.env.END ? Number(process.env.END) : null;
 const UA = "dgb-tools/oracle-ledger walker (github.com/dgb-tools)";
 
 async function get(path, raw = false, tries = 8) {
@@ -36,7 +39,8 @@ function loadState() {
 }
 async function main() {
   const st = loadState();
-  const tip = Number(await get("/blocks/tip/height"));
+  const tip = END ?? Number(await get("/blocks/tip/height"));
+  if (RAW_DIR) fs.mkdirSync(RAW_DIR, { recursive: true });
   console.error(`walk ${st.next}..${tip} (${tip - st.next + 1} blocks) conc=${CONC} out=${OUT}`);
   const fd = fs.openSync(OUT, "a");
   const CHUNK = CONC * 10;
@@ -47,9 +51,9 @@ async function main() {
     const meta = new Map();
     await pool(tops, CONC, async (t) => { for (const blk of JSON.parse(await get(`/blocks/${t}`))) if (blk.height >= h0 && blk.height <= h1) meta.set(blk.height, blk); });
     for (let h = h0; h <= h1; h++) if (!meta.has(h)) throw new Error(`missing header ${h}`);
-    const heights = []; for (let h = h0; h <= h1; h++) heights.push(h);
+    const heights = []; for (let h = h0; h <= h1; h++) heights.push(h); const rawKeep = [];
     const rows = await pool(heights, CONC, async (h) => {
-      const m = meta.get(h); const raw = await get(`/block/${m.id}/raw`, true); const blk = readBlock(raw);
+      const m = meta.get(h); const raw = await get(`/block/${m.id}/raw`, true); const blk = readBlock(raw); if (RAW_DIR) rawKeep.push([h, raw]);
       if (m.previousblockhash && blk.header.prev !== m.previousblockhash) throw new Error(`header/prev mismatch at ${h}`);
       const f = findOracleBundle(blk.coinbase); const r = f.record;
       return { height: h, hash: m.id, prev: blk.header.prev, time: blk.header.time, ntx: blk.ntx, size: blk.size,
@@ -62,7 +66,8 @@ async function main() {
     // hash-chain check across the chunk and against the previous chunk
     let last = st.lastHash;
     for (const r of rows) { if (last && r.prev !== last) throw new Error(`hash chain broken at ${r.height}: prev ${r.prev} != ${last}`); last = r.hash; }
-    fs.writeSync(fd, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    if (RAW_DIR) { const cs = Math.floor(h0 / 20000) * 20000; const bin = `${RAW_DIR}/raw-${cs}.bin`, idx = `${RAW_DIR}/raw-${cs}.idx.jsonl`; let off = fs.existsSync(bin) ? fs.statSync(bin).size : 0; const bfd = fs.openSync(bin, "a"), ifd = fs.openSync(idx, "a"); for (const [h, raw] of rawKeep.sort((a, b) => a[0] - b[0])) { fs.writeSync(bfd, raw); fs.writeSync(ifd, JSON.stringify({ h, o: off, n: raw.length }) + "\n"); off += raw.length; } fs.closeSync(bfd); fs.closeSync(ifd); }
+    if (!NO_ROWS) fs.writeSync(fd, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
     st.next = h1 + 1; st.lastHash = last; st.rows += rows.length; st.updated = new Date().toISOString(); st.tip_seen = tip;
     fs.writeFileSync(STATE, JSON.stringify(st, null, 2));
     if (((h1 - START) % 2400) < CHUNK) console.error(`${new Date().toISOString().slice(11, 19)} at ${h1} (${((h1 - START) / (tip - START) * 100).toFixed(1)}%) rows=${st.rows}`);
